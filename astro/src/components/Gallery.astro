@@ -2,7 +2,7 @@
 /**
  * Gallery.astro - A lightweight, zero-dependency slide gallery component for Astro & MDX.
  * Supports image switching via click, navigation buttons, pagination dots, arrow keys,
- * and an interactive fullscreen lightbox overlay with a surrounding container border.
+ * and an interactive fullscreen lightbox overlay appended safely to the body.
  */
 
 interface Props {
@@ -37,20 +37,85 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
         ></span>
       ))}
     </div>
+  </div>
+)}
 
-    <!-- Lightbox Overlay -->
-    <div class="lightbox-overlay" role="dialog" aria-modal="true">
+<script>
+  // Global Lightbox Container (Singletons to avoid layout clipping issues)
+  let globalLightbox = document.getElementById('global-mdx-lightbox');
+  let lightboxImg: HTMLImageElement;
+  let currentActiveGallery: HTMLElement | null = null;
+  let activeImages: string[] = [];
+  let currentIndex = 0;
+
+  if (!globalLightbox) {
+    globalLightbox = document.createElement('div');
+    globalLightbox.id = 'global-mdx-lightbox';
+    globalLightbox.className = 'lightbox-overlay';
+    globalLightbox.innerHTML = `
       <button type="button" class="lightbox-close" aria-label="Close fullscreen">&times;</button>
       <button type="button" class="lightbox-btn lightbox-prev" aria-label="Previous slide">&#10094;</button>
       <div class="lightbox-content">
         <img class="lightbox-image" src="" alt="Fullscreen Gallery Slide" />
       </div>
       <button type="button" class="lightbox-btn lightbox-next" aria-label="Next slide">&#10095;</button>
-    </div>
-  </div>
-)}
+    `;
+    document.body.appendChild(globalLightbox);
 
-<script>
+    lightboxImg = globalLightbox.querySelector('.lightbox-image') as HTMLImageElement;
+
+    const closeLightbox = () => {
+      globalLightbox?.classList.remove('active');
+      document.body.style.overflow = '';
+      currentActiveGallery = null;
+    };
+
+    globalLightbox.querySelector('.lightbox-close')?.addEventListener('click', closeLightbox);
+    globalLightbox.addEventListener('click', (e) => {
+      if (e.target === globalLightbox) closeLightbox();
+    });
+
+    globalLightbox.querySelector('.lightbox-prev')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentActiveGallery) {
+        changeGlobalSlide(-1);
+      }
+    });
+
+    globalLightbox.querySelector('.lightbox-next')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentActiveGallery) {
+        changeGlobalSlide(1);
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (!globalLightbox?.classList.contains('active')) return;
+      if (e.key === 'ArrowRight') changeGlobalSlide(1);
+      if (e.key === 'ArrowLeft') changeGlobalSlide(-1);
+      if (e.key === 'Escape') closeLightbox();
+    });
+  } else {
+    lightboxImg = globalLightbox.querySelector('.lightbox-image') as HTMLImageElement;
+  }
+
+  function changeGlobalSlide(direction: number) {
+    if (!currentActiveGallery) return;
+    currentIndex = (currentIndex + direction + activeImages.length) % activeImages.length;
+    lightboxImg.src = activeImages[currentIndex];
+
+    // Sync back to inline gallery
+    const imgElement = currentActiveGallery.querySelector('.active-image') as HTMLImageElement;
+    const counter = currentActiveGallery.querySelector('.current-idx');
+    const dots = currentActiveGallery.querySelectorAll('.dot');
+
+    if (imgElement) imgElement.src = activeImages[currentIndex];
+    if (counter) counter.textContent = String(currentIndex + 1);
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === currentIndex);
+    });
+  }
+
   document.querySelectorAll('.mdx-slide-gallery').forEach((gallery) => {
     const imgElement = gallery.querySelector('.active-image') as HTMLImageElement;
     const prevBtn = gallery.querySelector('.prev-btn');
@@ -58,104 +123,67 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     const counter = gallery.querySelector('.current-idx');
     const dots = gallery.querySelectorAll('.dot');
     
-    // Lightbox elements
-    const lightbox = gallery.querySelector('.lightbox-overlay') as HTMLElement;
-    const lightboxImg = gallery.querySelector('.lightbox-image') as HTMLImageElement;
-    const lightboxClose = gallery.querySelector('.lightbox-close');
-    const lightboxPrev = gallery.querySelector('.lightbox-prev');
-    const lightboxNext = gallery.querySelector('.lightbox-next');
-    
-    // Parse images array safely from data attribute
     const imagesAttr = gallery.getAttribute('data-images');
     const images: string[] = imagesAttr ? JSON.parse(imagesAttr) : [];
 
-    let currentIndex = 0;
+    let localIndex = 0;
 
     function updateGallery(index: number) {
       if (index < 0) index = images.length - 1;
       if (index >= images.length) index = 0;
-      currentIndex = index;
+      localIndex = index;
 
-      if (images[currentIndex]) {
-        imgElement.src = images[currentIndex];
-        if (lightbox) lightboxImg.src = images[currentIndex];
+      if (images[localIndex]) {
+        imgElement.src = images[localIndex];
       }
       
-      if (counter) counter.textContent = String(currentIndex + 1);
+      if (counter) counter.textContent = String(localIndex + 1);
 
       dots.forEach((dot, i) => {
-        dot.classList.toggle('active', i === currentIndex);
+        dot.classList.toggle('active', i === localIndex);
       });
     }
 
-    // Open Lightbox on image click
     imgElement?.addEventListener('click', () => {
+      currentActiveGallery = gallery as HTMLElement;
+      activeImages = images;
+      currentIndex = localIndex;
       if (images[currentIndex]) {
         lightboxImg.src = images[currentIndex];
       }
-      lightbox?.classList.add('active');
+      globalLightbox?.classList.add('active');
       document.body.style.overflow = 'hidden';
     });
 
-    function closeLightbox() {
-      lightbox?.classList.remove('active');
-      document.body.style.overflow = '';
-    }
-
-    lightboxClose?.addEventListener('click', closeLightbox);
-    lightbox?.addEventListener('click', (e) => {
-      if (e.target === lightbox) closeLightbox();
-    });
-
-    // Navigation buttons (normal view)
     prevBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      updateGallery(currentIndex - 1);
+      updateGallery(localIndex - 1);
     });
 
     nextBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      updateGallery(currentIndex + 1);
+      updateGallery(localIndex + 1);
     });
 
-    // Navigation buttons (lightbox view)
-    lightboxPrev?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      updateGallery(currentIndex - 1);
-      lightboxImg.src = images[currentIndex];
-    });
-
-    lightboxNext?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      updateGallery(currentIndex + 1);
-      lightboxImg.src = images[currentIndex];
-    });
-
-    // Click on dot indicators
     dots.forEach((dot, i) => {
       dot.addEventListener('click', (e) => {
         e.stopPropagation();
         updateGallery(i);
+        localIndex = i;
       });
     });
 
-    // Arrow key navigation
     window.addEventListener('keydown', (e) => {
       const rect = gallery.getBoundingClientRect();
       const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-      const isLightboxActive = lightbox?.classList.contains('active');
+      const isLightboxOpen = globalLightbox?.classList.contains('active') && currentActiveGallery === gallery;
       
-      if (isVisible || isLightboxActive) {
+      if (isVisible && !globalLightbox?.classList.contains('active')) {
         if (e.key === 'ArrowRight') {
-          updateGallery(currentIndex + 1);
-          if (isLightboxActive) lightboxImg.src = images[currentIndex];
+          updateGallery(localIndex + 1);
         }
         if (e.key === 'ArrowLeft') {
-          updateGallery(currentIndex - 1);
-          if (isLightboxActive) lightboxImg.src = images[currentIndex];
-        }
-        if (e.key === 'Escape' && isLightboxActive) {
-          closeLightbox();
+          updateGallery(localIndex - 1);
         }
       }
     });
@@ -249,13 +277,15 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     background-color: var(--sl-color-accent, #7f52ff);
     transform: scale(1.3);
   }
+</style>
 
-  /* Lightbox Styles */
+<style is:global>
+  /* Global Lightbox Styles to escape Starlight container constraints */
   .lightbox-overlay {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.85);
-    z-index: 9999;
+    z-index: 99999;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -305,7 +335,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 100000;
     transition: background-color 0.2s ease;
   }
 
@@ -332,7 +362,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 100000;
     transition: background-color 0.2s ease;
   }
 
