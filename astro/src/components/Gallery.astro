@@ -2,7 +2,7 @@
 /**
  * Gallery.astro - A lightweight, zero-dependency slide gallery component for Astro & MDX.
  * Supports image switching via click, navigation buttons, pagination dots, arrow keys,
- * and an interactive fullscreen lightbox overlay appended safely to the body.
+ * and an interactive fullscreen lightbox overlay with toggle zoom on click.
  */
 
 interface Props {
@@ -41,12 +41,13 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
 )}
 
 <script>
-  // Global Lightbox Container (Singletons to avoid layout clipping issues)
   let globalLightbox = document.getElementById('global-mdx-lightbox');
   let lightboxImg: HTMLImageElement;
+  let lightboxContent: HTMLElement;
   let currentActiveGallery: HTMLElement | null = null;
   let activeImages: string[] = [];
   let currentIndex = 0;
+  let isZoomed = false;
 
   if (!globalLightbox) {
     globalLightbox = document.createElement('div');
@@ -63,9 +64,12 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     document.body.appendChild(globalLightbox);
 
     lightboxImg = globalLightbox.querySelector('.lightbox-image') as HTMLImageElement;
+    lightboxContent = globalLightbox.querySelector('.lightbox-content') as HTMLElement;
 
     const closeLightbox = () => {
       globalLightbox?.classList.remove('active');
+      lightboxContent.classList.remove('zoomed');
+      isZoomed = false;
       document.body.style.overflow = '';
       currentActiveGallery = null;
     };
@@ -75,36 +79,48 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
       if (e.target === globalLightbox) closeLightbox();
     });
 
+    // Zoom toggle on lightbox image click
+    lightboxImg.addEventListener('click', (e) => {
+      e.stopPropagation();
+      isZoomed = !isZoomed;
+      lightboxContent.classList.toggle('zoomed', isZoomed);
+    });
+
     globalLightbox.querySelector('.lightbox-prev')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (currentActiveGallery) {
-        changeGlobalSlide(-1);
-      }
+      if (currentActiveGallery) changeGlobalSlide(-1);
     });
 
     globalLightbox.querySelector('.lightbox-next')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (currentActiveGallery) {
-        changeGlobalSlide(1);
-      }
+      if (currentActiveGallery) changeGlobalSlide(1);
     });
 
     window.addEventListener('keydown', (e) => {
       if (!globalLightbox?.classList.contains('active')) return;
-      if (e.key === 'ArrowRight') changeGlobalSlide(1);
-      if (e.key === 'ArrowLeft') changeGlobalSlide(-1);
-      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowRight' && !isZoomed) changeGlobalSlide(1);
+      if (e.key === 'ArrowLeft' && !isZoomed) changeGlobalSlide(-1);
+      if (e.key === 'Escape') {
+        if (isZoomed) {
+          isZoomed = false;
+          lightboxContent.classList.remove('zoomed');
+        } else {
+          closeLightbox();
+        }
+      }
     });
   } else {
     lightboxImg = globalLightbox.querySelector('.lightbox-image') as HTMLImageElement;
+    lightboxContent = globalLightbox.querySelector('.lightbox-content') as HTMLElement;
   }
 
   function changeGlobalSlide(direction: number) {
     if (!currentActiveGallery) return;
+    isZoomed = false;
+    lightboxContent.classList.remove('zoomed');
     currentIndex = (currentIndex + direction + activeImages.length) % activeImages.length;
     lightboxImg.src = activeImages[currentIndex];
 
-    // Sync back to inline gallery
     const imgElement = currentActiveGallery.querySelector('.active-image') as HTMLImageElement;
     const counter = currentActiveGallery.querySelector('.current-idx');
     const dots = currentActiveGallery.querySelectorAll('.dot');
@@ -178,12 +194,8 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
       const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
       
       if (isVisible && !globalLightbox?.classList.contains('active')) {
-        if (e.key === 'ArrowRight') {
-          updateGallery(localIndex + 1);
-        }
-        if (e.key === 'ArrowLeft') {
-          updateGallery(localIndex - 1);
-        }
+        if (e.key === 'ArrowRight') updateGallery(localIndex + 1);
+        if (e.key === 'ArrowLeft') updateGallery(localIndex - 1);
       }
     });
   });
@@ -207,7 +219,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px; /* Sorgt für den umlaufenden Rand oben, unten, links und rechts */
+    padding: 16px;
   }
 
   .active-image {
@@ -282,7 +294,6 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
 </style>
 
 <style is:global>
-  /* Global Lightbox Styles to escape Starlight container constraints */
   .lightbox-overlay {
     position: fixed;
     inset: 0;
@@ -321,6 +332,17 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     max-height: 100%;
     object-fit: contain;
     display: block;
+    cursor: zoom-in;
+    transition: transform 0.3s ease;
+  }
+
+  .lightbox-content.zoomed .lightbox-image {
+    transform: scale(1.75);
+    cursor: grab;
+  }
+
+  .lightbox-content.zoomed .lightbox-image:active {
+    cursor: grabbing;
   }
 
   .lightbox-btn {
