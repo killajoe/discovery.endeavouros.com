@@ -176,7 +176,6 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     window.addEventListener('keydown', (e) => {
       const rect = gallery.getBoundingClientRect();
       const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-      const isLightboxOpen = globalLightbox?.classList.contains('active') && currentActiveGallery === gallery;
       
       if (isVisible && !globalLightbox?.classList.contains('active')) {
         if (e.key === 'ArrowRight') {
@@ -208,11 +207,12 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 16px; /* Sorgt für den umlaufenden Rand oben, unten, links und rechts */
   }
 
   .active-image {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
     display: block;
   }
@@ -233,6 +233,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s ease;
+    z-index: 5;
   }
 
   .nav-btn:hover {
@@ -252,6 +253,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     border-radius: 4px;
     font-size: 0.8rem;
     font-family: monospace;
+    z-index: 5;
   }
 
   .dots-indicator {
@@ -311,6 +313,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     align-items: center;
     justify-content: center;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    padding: 24px;
   }
 
   .lightbox-image {
