@@ -1,7 +1,8 @@
 ---
 /**
  * Gallery.astro - A lightweight, zero-dependency slide gallery component for Astro & MDX.
- * Supports image switching via click, navigation buttons, pagination dots, and arrow keys.
+ * Supports image switching via click, navigation buttons, pagination dots, arrow keys,
+ * and an interactive fullscreen lightbox overlay with a surrounding container border.
  */
 
 interface Props {
@@ -36,6 +37,16 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
         ></span>
       ))}
     </div>
+
+    {/* Lightbox Overlay */}
+    <div class="lightbox-overlay" role="dialog" aria-modal="true">
+      <button type="button" class="lightbox-close" aria-label="Close fullscreen">&times;</button>
+      <button type="button" class="lightbox-btn lightbox-prev" aria-label="Previous slide">&#10094;</button>
+      <div class="lightbox-content">
+        <img class="lightbox-image" src="" alt="Fullscreen Gallery Slide" />
+      </div>
+      <button type="button" class="lightbox-btn lightbox-next" aria-label="Next slide">&#10095;</button>
+    </div>
   </div>
 )}
 
@@ -46,6 +57,13 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     const nextBtn = gallery.querySelector('.next-btn');
     const counter = gallery.querySelector('.current-idx');
     const dots = gallery.querySelectorAll('.dot');
+    
+    // Lightbox elements
+    const lightbox = gallery.querySelector('.lightbox-overlay') as HTMLElement;
+    const lightboxImg = gallery.querySelector('.lightbox-image') as HTMLImageElement;
+    const lightboxClose = gallery.querySelector('.lightbox-close');
+    const lightboxPrev = gallery.querySelector('.lightbox-prev');
+    const lightboxNext = gallery.querySelector('.lightbox-next');
     
     // Parse images array safely from data attribute
     const imagesAttr = gallery.getAttribute('data-images');
@@ -60,6 +78,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
 
       if (images[currentIndex]) {
         imgElement.src = images[currentIndex];
+        if (lightbox) lightboxImg.src = images[currentIndex];
       }
       
       if (counter) counter.textContent = String(currentIndex + 1);
@@ -69,10 +88,26 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
       });
     }
 
-    // Click on the main image -> Next slide
-    imgElement?.addEventListener('click', () => updateGallery(currentIndex + 1));
+    // Open Lightbox on image click
+    imgElement?.addEventListener('click', () => {
+      if (images[currentIndex]) {
+        lightboxImg.src = images[currentIndex];
+      }
+      lightbox?.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    });
 
-    // Navigation buttons
+    function closeLightbox() {
+      lightbox?.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    lightboxClose?.addEventListener('click', closeLightbox);
+    lightbox?.addEventListener('click', (e) => {
+      if (e.target === lightbox) closeLightbox();
+    });
+
+    // Navigation buttons (normal view)
     prevBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       updateGallery(currentIndex - 1);
@@ -83,6 +118,19 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
       updateGallery(currentIndex + 1);
     });
 
+    // Navigation buttons (lightbox view)
+    lightboxPrev?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateGallery(currentIndex - 1);
+      lightboxImg.src = images[currentIndex];
+    });
+
+    lightboxNext?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateGallery(currentIndex + 1);
+      lightboxImg.src = images[currentIndex];
+    });
+
     // Click on dot indicators
     dots.forEach((dot, i) => {
       dot.addEventListener('click', (e) => {
@@ -91,14 +139,24 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
       });
     });
 
-    // Arrow key navigation when gallery is visible
+    // Arrow key navigation
     window.addEventListener('keydown', (e) => {
       const rect = gallery.getBoundingClientRect();
       const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+      const isLightboxActive = lightbox?.classList.contains('active');
       
-      if (isVisible) {
-        if (e.key === 'ArrowRight') updateGallery(currentIndex + 1);
-        if (e.key === 'ArrowLeft') updateGallery(currentIndex - 1);
+      if (isVisible || isLightboxActive) {
+        if (e.key === 'ArrowRight') {
+          updateGallery(currentIndex + 1);
+          if (isLightboxActive) lightboxImg.src = images[currentIndex];
+        }
+        if (e.key === 'ArrowLeft') {
+          updateGallery(currentIndex - 1);
+          if (isLightboxActive) lightboxImg.src = images[currentIndex];
+        }
+        if (e.key === 'Escape' && isLightboxActive) {
+          closeLightbox();
+        }
       }
     });
   });
@@ -117,7 +175,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     border: 1px solid var(--sl-color-gray-5, #333);
     border-radius: 8px;
     overflow: hidden;
-    cursor: pointer;
+    cursor: zoom-in;
     aspect-ratio: 16 / 9;
     display: flex;
     align-items: center;
@@ -191,4 +249,12 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     background-color: var(--sl-color-accent, #7f52ff);
     transform: scale(1.3);
   }
-</style>
+
+  /* Lightbox Styles */
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
