@@ -13,7 +13,7 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
 ---
 
 {imageUrls.length > 0 && (
-  <div class="mdx-slide-gallery">
+  <div class="mdx-slide-gallery" data-images={JSON.stringify(imageUrls)}>
     <div class="slide-viewport">
       <img class="active-image" src={imageUrls[0]} alt="Gallery Slide" />
       
@@ -46,22 +46,19 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
     const counter = gallery.querySelector('.current-idx');
     const dots = gallery.querySelectorAll('.dot');
     
-    // Collect image paths from DOM/attributes
-    const images: string[] = Array.from(dots).map((dot) => {
-      const idx = Number(dot.getAttribute('data-index'));
-      return idx === 0 ? imgElement.src : '';
-    });
+    // Parse images array safely from data attribute
+    const imagesAttr = gallery.getAttribute('data-images');
+    const images: string[] = imagesAttr ? JSON.parse(imagesAttr) : [];
 
     let currentIndex = 0;
 
     function updateGallery(index: number) {
-      if (index < 0) index = dots.length - 1;
-      if (index >= dots.length) index = 0;
+      if (index < 0) index = images.length - 1;
+      if (index >= images.length) index = 0;
       currentIndex = index;
 
-      const targetDot = dots[currentIndex] as HTMLElement;
-      if (targetDot && targetDot.dataset.src) {
-        imgElement.src = targetDot.dataset.src;
+      if (images[currentIndex]) {
+        imgElement.src = images[currentIndex];
       }
       
       if (counter) counter.textContent = String(currentIndex + 1);
@@ -70,12 +67,6 @@ const imageUrls = images.map(img => typeof img === 'string' ? img : img.src);
         dot.classList.toggle('active', i === currentIndex);
       });
     }
-
-    // Read datasets from dots for image paths
-    dots.forEach((dot, i) => {
-      const dotEl = dot as HTMLElement;
-      if (i === 0) dotEl.dataset.src = imgElement.src;
-    });
 
     // Click on the main image -> Next slide
     imgElement?.addEventListener('click', () => updateGallery(currentIndex + 1));
